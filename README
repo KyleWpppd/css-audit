@@ -1,0 +1,1 @@
+Css-audit will crawl your site and take an inventory of every CSS class and id used, and compare it to those you have defined in your stylesheets. It makes to assertion as to styles used by JS
