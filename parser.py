@@ -4,20 +4,25 @@ CSS Audit
 """
 from sys import argv
 from HTMLParser import HTMLParser
+import re
 
-script, filename = argv
+import cssutils
+
+script, filename, urlroot = argv
 
 class Cssparser(HTMLParser):
-    def __init__(self, fh):
+    def __init__(self, fh, urlroot = None):
         HTMLParser.__init__(self)
         self.used_classes = []
         self.defined_classes = []
         self.linked_sheets = []
         self.fileids = []
+        self.inline_css_data = []
         self.get_data = False
+        self.follow_css_links = True
+        self.url_root = urlroot
+        # this line always goes last
         self.feed(fh.read())
-
-
     
     def handle_starttag(self, tag, attrs):
         dattrs = dict(attrs)
@@ -34,14 +39,14 @@ class Cssparser(HTMLParser):
             print "Found CSS inline defs"
             self.get_data = True
             print '====='
-            
-            
         self.append_styles(tag, attrs)
     
     def handle_data(self, data):
         if self.get_data == True:
-            self.inline_css_data = data
+            self.inline_css_data.append(data)
             print self.inline_css_data
+            print "Sending to parser"
+            self.parse_inline_styles(data, 'string')
             self.get_data = False
         
     def handle_startendtag(self, tag, attrs):
@@ -53,13 +58,49 @@ class Cssparser(HTMLParser):
             print "Found classes '%s'" % dattrs['class']
             self.used_classes.append(dattrs['class'])
 
+    '''
+    Function for parsing styles defined in the body of the document. This only includes data inside of HTML <style> tags, a URL, or file to open.
+    '''
+    def parse_inline_styles(self, data=None, import_type ='string'):
+        if data is None:
+            raise
+        #parser = cssutils.CSSParser(fetcher=self.replace_handler())
+        parser = cssutils.CSSParser()
+        if import_type == 'string':
+            print "importing string with url=%s" % self.url_root
+            sheet = parser.parseString(data,href=self.url_root)
+        elif import_type == 'url':
+            sheet = parser.parseUrl(data)
+        elif import_type == 'file':
+            sheet = parser.parseFile(data)
+        else:
+            raise
 
+        for i in range(len(sheet.cssRules)):
+            print "loop #%d, TYPE=%d" %  (i, sheet.cssRules[i].type)
+            if sheet.cssRules[i].type == cssutils.css.CSSStyleRule.STYLE_RULE:
+                selector = sheet.cssRules[i].selectorText
+                print "cssparser found  selector: %s" % selector
+                self.defined_classes.append(selector)
+            elif ( self.follow_css_links == True and
+                  sheet.cssRules[i].type == cssutils.css.CSSStyleRule.IMPORT_RULE ):
+                href = sheet.cssRules[i].href
+                print "Added %s to the stylesheets I'll crawl" % href
+                # we'll have to try to add in a url root here, if these are relative
+                # links. 
+                # self.parse_inline_styles(data=self.url_root+href, import_type='url')
+            else:
+                print "You fell through"
+                #parse_inline_styles(data=href, import_type='url')
+    
+    def replace_handler(self):
+        pass
 
 if __name__ == '__main__':
     # must send a file to open!
     #f = open('/Users/kyle/src/css-audit/data/yahoo.html', 'r')
     f = open(filename)
-    mycssauditor = Cssparser(f)
+    mycssauditor = Cssparser(f, urlroot)
     print "Total classes found %s" % mycssauditor.used_classes
     print "Found these stylesheets %s" % mycssauditor.linked_sheets
     
