@@ -1,3 +1,4 @@
+#! /usr/bin/env python
 """
 CSS Audit
 (C) Kyle Wanamaker, 2011
@@ -21,6 +22,8 @@ class Cssparser(HTMLParser):
         self.get_data = False
         self.follow_css_links = True
         self.url_root = urlroot
+        self.unchained_classes = []
+        
         # this line always goes last
         self.feed(fh.read())
     
@@ -34,11 +37,11 @@ class Cssparser(HTMLParser):
                      dattrs['type'].lower == 'text/css' ):
                     #try to open the url...
                     self.linked_sheets.append(dattrs['href'])
+        # look for <style type='text/css' ... /> tags usually found in the head
         elif ( tag.lower() == 'style' and 'type' in dattrs and
-                  dattrs['type'].lower() == 'text/css' ):
+               dattrs['type'].lower() == 'text/css' ):
             print "Found CSS inline defs"
             self.get_data = True
-            print '====='
         self.append_styles(tag, attrs)
     
     def handle_data(self, data):
@@ -56,7 +59,15 @@ class Cssparser(HTMLParser):
         dattrs = dict(attrs)
         if 'class' in dattrs:
             print "Found classes '%s'" % dattrs['class']
-            self.used_classes.append(dattrs['class'])
+            class_string = dattrs['class']
+            # These extract the styles without a period, so we have to add 
+            # it in.
+            r = re.compile('\W+')
+            class_names = re.split('\W+', class_string)
+            dotted_names = map(prepend_dot, class_names)
+            
+            self.used_classes.append(' '.join(dotted_names))
+            self.unchained_classes.append(dotted_names)
 
     '''
     Function for parsing styles defined in the body of the document. This only includes data inside of HTML <style> tags, a URL, or file to open.
@@ -76,6 +87,7 @@ class Cssparser(HTMLParser):
         else:
             raise
 
+        hrefs = []
         for i in range(len(sheet.cssRules)):
             print "loop #%d, TYPE=%d" %  (i, sheet.cssRules[i].type)
             if sheet.cssRules[i].type == cssutils.css.CSSStyleRule.STYLE_RULE:
@@ -87,14 +99,19 @@ class Cssparser(HTMLParser):
                 href = sheet.cssRules[i].href
                 print "Added %s to the stylesheets I'll crawl" % href
                 # we'll have to try to add in a url root here, if these are relative
-                # links. 
-                # self.parse_inline_styles(data=self.url_root+href, import_type='url')
+                # links.
+                self.linked_sheets.append(self.url_root+href)
+                self.parse_inline_styles(data=self.url_root+href, import_type='url')
             else:
                 print "You fell through"
                 #parse_inline_styles(data=href, import_type='url')
     
+    
     def replace_handler(self):
         pass
+
+def prepend_dot(word):
+    return '.' + word
 
 if __name__ == '__main__':
     # must send a file to open!
@@ -103,6 +120,13 @@ if __name__ == '__main__':
     mycssauditor = Cssparser(f, urlroot)
     print "Total classes found %s" % mycssauditor.used_classes
     print "Found these stylesheets %s" % mycssauditor.linked_sheets
-    
-
+    print "Total classes defined: %s" % mycssauditor.defined_classes
+    y = mycssauditor.used_classes
+    x = mycssauditor.defined_classes
+    #unused_classes = [[ x for x if x not in y ]]
+    print "Unused classes(maybe)"
+    print [ c for c in x if c not in y ]
+    print "Used classes without a definition:"
+    print [c for c in y if c not in x ]
+    #print "Unused defs:  %s" % (unused_classes)
 
