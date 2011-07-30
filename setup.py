@@ -20,13 +20,13 @@ setup(
           'Intended Audience :: End Users/Desktop',
           'Intended Audience :: Developers',
           'Intended Audience :: System Administrators',
-          'License :: OSI Approved :: GNU General Public License (GPL)'
-          'Operating System :: OS Independent'
+          'License :: OSI Approved :: GNU General Public License (GPL)',
+          'Operating System :: OS Independent',
           'Operating System :: MacOS :: MacOS X',
           'Operating System :: Microsoft :: Windows',
           'Operating System :: POSIX',
           'Programming Language :: Python',
-          'Topic :: Utilities'
+          'Topic :: Utilities',
           ],
 
       )
