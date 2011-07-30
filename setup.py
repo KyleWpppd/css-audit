@@ -6,7 +6,7 @@ from setuptools import setup
 
 setup(
       name='CssAudit',
-      packages=find_packages(),
+      packages=['cssaudit',],
       version='0.01a',
       description='A rather basic tool to see if you have excess styles in your CSS stylesheets.',
       author='Kyle Wanamaker (KyleWpppd)',
@@ -14,7 +14,7 @@ setup(
       url='http://github.com/KyleWpppd/css-audit',
       install_requires=['cssutils>=0.9.8a3', ],
       classifiers=[
-          'Development Status :: 2 - Pre-Alpha'
+          'Development Status :: 2 - Pre-Alpha',
           'Environment :: Console',
           'Environment :: Web Environment',
           'Intended Audience :: End Users/Desktop',
