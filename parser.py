@@ -33,10 +33,10 @@ class Cssparser(HTMLParser):
         # this line always goes last
         self.feed(fh.read())
         print "Linked sheets %s " % self.linked_sheets
-        #for sheet in self.linked_sheets:
-            #            print "And the sheet is %s" % sheet,
-            #            print "Because linked_sheets is: %s " % self.linked_sheets
-            #    self.parse_inline_styles(sheet, 'url')
+        for sheet in self.linked_sheets:
+            print "And the sheet is %s" % sheet,
+            print "Because linked_sheets is: %s " % self.linked_sheets
+            self.parse_inline_styles(sheet, 'url')
 
     
     def handle_starttag(self, tag, attrs):
@@ -133,10 +133,11 @@ class Cssparser(HTMLParser):
             self.used_ids.extend(prepend_hash(dattrs['id'].strip()))
             
             
-    '''
-    Function for parsing styles defined in the body of the document. This only includes data inside of HTML <style> tags, a URL, or file to open.
-    '''
     def parse_inline_styles(self, data=None, import_type ='string'):
+        """
+        Function for parsing styles defined in the body of the document. 
+        This only includes data inside of HTML <style> tags, a URL, or file to open.
+        """
         if data is None:
             raise
         parser = cssutils.CSSParser()
@@ -156,7 +157,6 @@ class Cssparser(HTMLParser):
 
         hrefs = []
         for i in range(len(sheet.cssRules)):
-            #print "loop #%d, TYPE=%d" %  (i, sheet.cssRules[i].type)
             if sheet.cssRules[i].type == cssutils.css.CSSStyleRule.STYLE_RULE:
                 selector = sheet.cssRules[i].selectorText
                 #print "cssparser found  selector: %s" % selector
