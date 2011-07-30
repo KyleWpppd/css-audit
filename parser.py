@@ -2,14 +2,19 @@
 """
 CSS Audit
 (C) Kyle Wanamaker, 2011
+Licensed under the GNU General Public License version 3
+Please see: http://www.gnu.org/licenses/ for the text of
+the GPL v3. 
+
+A copy of the GNU GPL v3 is included with the PyPi package
 """
-from sys import argv
+from sys import argv, exit
 from HTMLParser import HTMLParser
 import re
+import urllib2
 
 import cssutils
 
-script, filename, urlroot = argv
 
 class Cssparser(HTMLParser):
     def __init__(self, fh, urlroot = None):
@@ -27,6 +32,12 @@ class Cssparser(HTMLParser):
         self.used_elements = []
         # this line always goes last
         self.feed(fh.read())
+        print "Linked sheets %s " % self.linked_sheets
+        #for sheet in self.linked_sheets:
+            #            print "And the sheet is %s" % sheet,
+            #            print "Because linked_sheets is: %s " % self.linked_sheets
+            #    self.parse_inline_styles(sheet, 'url')
+
     
     def handle_starttag(self, tag, attrs):
         """
@@ -47,17 +58,15 @@ class Cssparser(HTMLParser):
         # a little more about the implementation. Whether HTML parser looks for 
         # the trailing slash at the end of an element, or just knows which elements
         # should be paired or not. 
-        print "found tag: %s" % tag
+        
+        #print "found tag: %s" % tag
         if tag.lower() == 'link':
             print "Found link"
             if all (k in dattrs for k in ('rel', 'href', 'type')):
                 if ( dattrs['rel'].lower() == 'stylesheet' and 
                      dattrs['type'].lower() == 'text/css' ):
                     #try to open the url...
-                    self.linked_sheets.extend(dattrs['href'])
-                    # this needs to move somewhere else!!
-                    for sheet in self.linked_sheets:
-                        self.parse_inline_styles(sheet, 'file')
+                    self.linked_sheets.append(dattrs['href'])
                     
         # look for <style type='text/css' ... /> tags usually found in the head
         elif (tag.lower() == 'style' and 'type' in dattrs and
@@ -105,28 +114,22 @@ class Cssparser(HTMLParser):
                     #try to open the url...
                     print "Trying to read %s"  % dattrs['href']
                     if dattrs['href'][:5].lower() == 'http:':
-                        self.linked_sheets.extend(dattrs['href'])
+                        self.linked_sheets.append(dattrs['href'])
                     else:
                         self.linked_sheets.append(self.url_root+dattrs['href'])
-
-                    for sheet in self.linked_sheets:
-                        print "And the sheet is %s" % sheet,
-                        print "Because linked_sheets is: %s " % self.linked_sheets
-                        self.parse_inline_styles(sheet, 'url')
-        
         self.append_styles(tag, attrs)
     
     def append_styles(self, tag, attrs):
         dattrs = dict(attrs)
         if 'class' in dattrs:
-            print "Found classes '%s'" % dattrs['class']
+            #print "Found classes '%s'" % dattrs['class']
             class_names = dattrs['class'].split()
             dotted_names = map(prepend_dot,class_names)
             dotted_names.sort()
             self.used_classes.extend(' '.join(dotted_names))
             self.unchained_classes.extend(dotted_names)
         if 'id' in dattrs:
-            print "Found id '%s'" % dattrs['id']
+            #print "Found id '%s'" % dattrs['id']
             self.used_ids.extend(prepend_hash(dattrs['id'].strip()))
             
             
@@ -144,10 +147,8 @@ class Cssparser(HTMLParser):
             try:
                 sheet = parser.parseUrl(data)
             except:
-                print "Winner, winner"
+                print "WARNING: Failed attempting to parse %s" % data
                 return
-            else:
-                print "Loser, loser"
         elif import_type == 'file':
             sheet = parser.parseFile(data)
         else:
@@ -155,24 +156,24 @@ class Cssparser(HTMLParser):
 
         hrefs = []
         for i in range(len(sheet.cssRules)):
-            print "loop #%d, TYPE=%d" %  (i, sheet.cssRules[i].type)
+            #print "loop #%d, TYPE=%d" %  (i, sheet.cssRules[i].type)
             if sheet.cssRules[i].type == cssutils.css.CSSStyleRule.STYLE_RULE:
                 selector = sheet.cssRules[i].selectorText
-                print "cssparser found  selector: %s" % selector
+                #print "cssparser found  selector: %s" % selector
                 selectors = selector.split(',')
                 self.defined_classes.extend(selectors)
 
             elif ( self.follow_css_links == True and
                   sheet.cssRules[i].type == cssutils.css.CSSStyleRule.IMPORT_RULE ):
                 href = sheet.cssRules[i].href
-                print "Added %s to the stylesheets I'll crawl" % href
+                print "Added %s to the stylesheets to crawl" % href
                 # we'll have to try to add in a url root here, if these are relative
                 # links.
-                self.linked_sheets.extend(self.url_root+href)
+                self.linked_sheets.append(self.url_root+href)
                 self.parse_inline_styles(data=self.url_root+href, import_type='url')
             else:
-                print "You fell through"
-                #parse_inline_styles(data=href, import_type='url')
+                # we don't worry about these cases yet.
+                pass
     
     
 
@@ -189,7 +190,7 @@ def extract_leftmost_selector(selector_list):
     classes = set()
     ids = set()
     elements = set()
-    print "Selector list: %s \n\n\n\n\n\n" % selector_list
+    #    print "Selector list: %s \n\n\n\n\n\n" % selector_list
     for selector in selector_list:
         selector = selector.split()[0]
         if selector[0] == '.':
@@ -207,12 +208,23 @@ def extract_leftmost_selector(selector_list):
 
 def main():
     from optparse import OptionParser
-    opt_parser = OptionParser()
-    parser.add_option("-f", "--file", dest="filename",
+    opt_parser = OptionParser("usage: %prog [options] file url_root")
+    opt_parser.add_option("-f", "--file", dest="filename",
                       help="The HTML source file to begin parsing")
-    parser.add_option("-u", "--url", dest="urlroot",
+    opt_parser.add_option("-u", "--url", dest="urlroot",
                       help="The URL Root of the site you are going to crawl")
-
+    
+    (options, args) = opt_parser.parse_args()
+    if len(args) != 2:
+        if opt_parser.filename is not None and opt_parser.urlroot is not None:
+            urlroot = opt_parser.urlroot
+            filename = opt_parser.filename
+        else:
+            opt_parser.error("Incorrect number of arguments")
+    else:
+        filename = args[0]
+        urlroot = args[1]
+    
     # must send a file to open!
     try:
         f = open(filename)
@@ -220,6 +232,12 @@ def main():
         print "Unable to open file %s for reading" % filename
         sys.exit(1)
 
+    try:
+        urllib2.urlopen(urlroot)
+    except:
+        print "Unable to open url %s for reading" % urlroot
+        sys.exit(1)
+    
     mycssauditor = Cssparser(f, urlroot)
     used_classes = set(mycssauditor.unchained_classes)
     used_ids = set(mycssauditor.used_ids)
@@ -227,7 +245,9 @@ def main():
     defined_classes = extract_leftmost_selector(mycssauditor.defined_classes)['classes']
     print "Defined classes: %s \n\n\n\n\n" % defined_classes
     print "Used classes: %s \n\n\n\n\n\n" % used_classes
-    print defined_classes - used_classes
+    print "These classes seem to have been defined but left unused:\n %s\n" % (
+        defined_classes - used_classes
+        )
 
 if __name__ == '__main__':
     main()
