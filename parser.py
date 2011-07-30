@@ -42,7 +42,11 @@ class Cssparser(HTMLParser):
            'attr1', 'attr2', 'attr3' ... 'attrN')
         """
         dattrs = dict(attrs)
-        # look for '<link type='text/css' rel='stylesheet' href='...' /> tags
+        # look for '<link type='text/css' rel='stylesheet' href='...' > tags
+        # to see if looking for link tags makes sense here, we need to know
+        # a little more about the implementation. Whether HTML parser looks for 
+        # the trailing slash at the end of an element, or just knows which elements
+        # should be paired or not. 
         print "found tag: %s" % tag
         if tag.lower() == 'link':
             print "Found link"
@@ -56,8 +60,8 @@ class Cssparser(HTMLParser):
                         self.parse_inline_styles(sheet, 'file')
                     
         # look for <style type='text/css' ... /> tags usually found in the head
-        elif ( tag.lower() == 'style' and 'type' in dattrs and
-               dattrs['type'].lower() == 'text/css' ):
+        elif (tag.lower() == 'style' and 'type' in dattrs and
+              dattrs['type'].lower() == 'text/css'):
             print "Found CSS inline defs"
             self.get_data = True
         self.append_styles(tag, attrs)
@@ -104,7 +108,7 @@ class Cssparser(HTMLParser):
                         self.linked_sheets.extend(dattrs['href'])
                     else:
                         self.linked_sheets.append(self.url_root+dattrs['href'])
-                    print "Charlie Sheen is full of win"
+
                     for sheet in self.linked_sheets:
                         print "And the sheet is %s" % sheet,
                         print "Because linked_sheets is: %s " % self.linked_sheets
@@ -202,6 +206,13 @@ def extract_leftmost_selector(selector_list):
 
 
 def main():
+    from optparse import OptionParser
+    opt_parser = OptionParser()
+    parser.add_option("-f", "--file", dest="filename",
+                      help="The HTML source file to begin parsing")
+    parser.add_option("-u", "--url", dest="urlroot",
+                      help="The URL Root of the site you are going to crawl")
+
     # must send a file to open!
     try:
         f = open(filename)
