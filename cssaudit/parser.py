@@ -22,20 +22,22 @@ class Cssparser(HTMLParser):
         self.used_classes = []
         self.defined_classes = []
         self.linked_sheets = []
-        self.fileids = []
         self.inline_css_data = []
         self.get_data = False
         self.follow_css_links = True
         self.url_root = urlroot
+        # This is a hack because we don't build a tree; instead we have to
+        # break the leftmost class and stick it in `unchained_classes`.
         self.unchained_classes = []
         self.used_ids = []
         self.used_elements = []
+        
         # this line always goes last
         self.feed(fh.read())
-        print "Linked sheets %s " % self.linked_sheets
+        #print "Linked sheets %s " % self.linked_sheets
         for sheet in self.linked_sheets:
-            print "And the sheet is %s" % sheet,
-            print "Because linked_sheets is: %s " % self.linked_sheets
+            #print "And the sheet is %s" % sheet,
+            #print "Because linked_sheets is: %s " % self.linked_sheets
             self.parse_inline_styles(sheet, 'url')
 
     
@@ -59,19 +61,23 @@ class Cssparser(HTMLParser):
         # the trailing slash at the end of an element, or just knows which elements
         # should be paired or not. 
         
-        #print "found tag: %s" % tag
         if tag.lower() == 'link':
             print "Found link"
             if all (k in dattrs for k in ('rel', 'href', 'type')):
                 if ( dattrs['rel'].lower() == 'stylesheet' and 
                      dattrs['type'].lower() == 'text/css' ):
-                    #try to open the url...
-                    self.linked_sheets.append(dattrs['href'])
+                    # Add the url to the stack
+                    if (dattrs['href'][:5].lower() == 'http:' or 
+                       dattrs['href'][:6].lower() == 'https:'):
+                        self.linked_sheets.append(dattrs['href'])
+                    else:
+                        self.linked_sheets.append(self.url_root+dattrs['href'])
                     
-        # look for <style type='text/css' ... /> tags usually found in the head
-        elif (tag.lower() == 'style' and 'type' in dattrs and
-              dattrs['type'].lower() == 'text/css'):
-            print "Found CSS inline defs"
+        # Look for <style type='text/css' ... /> tags and add their rules
+        # into the list.
+        elif (tag.lower() == 'style' and 
+              'type' in dattrs and dattrs['type'].lower() == 'text/css'):
+            #print "Found CSS inline defs"
             self.get_data = True
         self.append_styles(tag, attrs)
     
@@ -88,8 +94,8 @@ class Cssparser(HTMLParser):
         """
         if self.get_data == True:
             self.inline_css_data.append(data)
-            print self.inline_css_data
-            print "Sending to parser"
+            #print self.inline_css_data
+            #print "Sending to parser"
             self.parse_inline_styles(data, 'string')
             self.get_data = False
         
@@ -107,19 +113,31 @@ class Cssparser(HTMLParser):
         """
         dattrs = dict(attrs)
         if tag.lower() == 'link':
-            print "Found link"
+            #print "Found link"
             if all (k in dattrs for k in ('rel', 'href', 'type')):
                 if ( dattrs['rel'].lower() == 'stylesheet' and 
                      dattrs['type'].lower() == 'text/css' ):
                     #try to open the url...
-                    print "Trying to read %s"  % dattrs['href']
-                    if dattrs['href'][:5].lower() == 'http:':
+                    #print "Trying to read %s"  % dattrs['href']
+                    if (dattrs['href'][:5].lower() == 'http:' or 
+                       dattrs['href'][:6].lower() == 'https:'):
                         self.linked_sheets.append(dattrs['href'])
                     else:
                         self.linked_sheets.append(self.url_root+dattrs['href'])
         self.append_styles(tag, attrs)
     
     def append_styles(self, tag, attrs):
+        """
+        Append classes found in HTML elements to the list of styles used.
+        Because we haven't built the tree, we aren't using the `tag` parameter
+        for now.
+        @param <string> tag
+            The HTML tag we're parsing
+        @param <tuple> attrs
+            A tuple of HTML element attributes such as 'class', 'id',
+            'style', etc. The tuple is of the form ('html_attribute',
+            'attr1', 'attr2', 'attr3' ... 'attrN')
+        """
         dattrs = dict(attrs)
         if 'class' in dattrs:
             #print "Found classes '%s'" % dattrs['class']
@@ -142,13 +160,15 @@ class Cssparser(HTMLParser):
             raise
         parser = cssutils.CSSParser()
         if import_type == 'string':
-            print "importing string with url=%s" % self.url_root
+            #print "importing string with url=%s" % self.url_root
             sheet = parser.parseString(data,href=self.url_root)
         elif import_type == 'url':
+          if data[:5].lower() == 'http:' or data[:6].lower() == 'https:':
+            print "YES because it was: %s " % data[:5].lower()
             try:
                 sheet = parser.parseUrl(data)
             except:
-                print "WARNING: Failed attempting to parse %s" % data
+                sys.stderr.write("WARNING: Failed attempting to parse %s" % data)
                 return
         elif import_type == 'file':
             sheet = parser.parseFile(data)
@@ -166,13 +186,17 @@ class Cssparser(HTMLParser):
             elif ( self.follow_css_links == True and
                   sheet.cssRules[i].type == cssutils.css.CSSStyleRule.IMPORT_RULE ):
                 href = sheet.cssRules[i].href
-                print "Added %s to the stylesheets to crawl" % href
-                # we'll have to try to add in a url root here, if these are relative
-                # links.
-                self.linked_sheets.append(self.url_root+href)
-                self.parse_inline_styles(data=self.url_root+href, import_type='url')
+                sys.stderr.write("Added %s to the stylesheets to crawl" % href)
+                
+                if href[:5].lower() == 'http:' or href[:6].lower() == 'https:':
+                    self.linked_sheets.append(href)
+                else:
+                    # We'll have to try to add in a url root here, if these are relative
+                    # links.
+                    self.linked_sheets.append(self.url_root+href)
+                    self.parse_inline_styles(data=self.url_root+href, import_type='url')
             else:
-                # we don't worry about these cases yet.
+                # We won't worry about the other rule types.
                 pass
     
     
@@ -187,6 +211,12 @@ def prepend_hash(word):
     return prepend_char('#', word)
 
 def extract_leftmost_selector(selector_list):
+    """
+    Because we aren't building a DOM tree to transverse, the only way
+    to get the most general selectors is to take the leftmost. 
+    For example with `div.outer div.inner`, we can't tell if `div.inner`
+    has been used in context without building a tree.
+    """
     classes = set()
     ids = set()
     elements = set()
@@ -209,9 +239,8 @@ def extract_leftmost_selector(selector_list):
 def main():
     # We want to change this so that it can just accept a plain URL. 
     usage = """
-            Usage: 
-            $ parser.py url
-            Note: the url must be prefixed with the http method 
+            Usage: $ ./parser.py url
+            Note: the url must be prefixed with the desired method 
             (either `http://` or `https://`)\n\n"""
     src = ''
     try:
@@ -232,12 +261,14 @@ def main():
         sys.exit(1)
     
     mycssauditor = Cssparser(f, urlroot)
+    
+    # Use the `set` datatype since it will eliminate duplicate entries for us.
     used_classes = set(mycssauditor.unchained_classes)
     used_ids = set(mycssauditor.used_ids)
     used_elements = set(mycssauditor.used_elements)
     defined_classes = extract_leftmost_selector(mycssauditor.defined_classes)['classes']
     print "Defined classes: %s \n\n\n\n\n" % defined_classes
-    print "Used classes: %s \n\n\n\n\n\n" % used_classes
+    print "Used classes: %s \n\n\n\n\n" % used_classes
     print "These classes seem to have been defined but left unused:\n %s\n" % (
         defined_classes - used_classes
         )
