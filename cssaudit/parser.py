@@ -8,7 +8,7 @@ the GPL v3.
 
 A copy of the GNU GPL v3 is included with the PyPi package
 """
-from sys import argv, exit
+import sys
 from HTMLParser import HTMLParser
 import re
 import urllib2
@@ -207,35 +207,28 @@ def extract_leftmost_selector(selector_list):
 
 
 def main():
-    from optparse import OptionParser
-    opt_parser = OptionParser("usage: %prog [options] file url_root")
-    opt_parser.add_option("-f", "--file", dest="filename",
-                      help="The HTML source file to begin parsing")
-    opt_parser.add_option("-u", "--url", dest="urlroot",
-                      help="The URL Root of the site you are going to crawl")
-    
-    (options, args) = opt_parser.parse_args()
-    if len(args) != 2:
-        if opt_parser.filename is not None and opt_parser.urlroot is not None:
-            urlroot = opt_parser.urlroot
-            filename = opt_parser.filename
-        else:
-            opt_parser.error("Incorrect number of arguments")
-    else:
-        filename = args[0]
-        urlroot = args[1]
-    
-    # must send a file to open!
+    # We want to change this so that it can just accept a plain URL. 
+    usage = """
+            Usage: 
+            $ parser.py url
+            Note: the url must be prefixed with the http method 
+            (either `http://` or `https://`)\n\n"""
+    src = ''
     try:
-        f = open(filename)
+      print sys.argv
+      script, src = sys.argv
     except:
-        print "Unable to open file %s for reading" % filename
+        sys.stderr.write("Incorrect number of arguments given.\n")
+        sys.stderr.write(usage)
         sys.exit(1)
 
+    req = urllib2.Request(src)
+    urlroot = req.get_type() + '://' + req.get_host()
     try:
-        urllib2.urlopen(urlroot)
+        f = urllib2.urlopen(req)
     except:
-        print "Unable to open url %s for reading" % urlroot
+        sys.stderr.write("Unable to open url: %s for reading." % src)
+        print(usage)
         sys.exit(1)
     
     mycssauditor = Cssparser(f, urlroot)
